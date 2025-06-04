@@ -1,26 +1,33 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import uvicorn
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain.agents.openai_tools.base import create_openai_tools_agent
 from langchain_core.prompts.chat import MessagesPlaceholder
 from langchain.agents.agent import AgentExecutor
-from langchain.agents import tool
 from langchain_core.output_parsers.string import StrOutputParser
+from Mytools import *
+from langchain.memory.token_buffer import ConversationTokenBufferMemory
+from langchain_community.chat_message_histories.redis import RedisChatMessageHistory
+from langchain.memory.buffer import ConversationBufferMemory
+from langchain_community.document_loaders.web_base import WebBaseLoader
+from langchain_text_splitters.character import RecursiveCharacterTextSplitter
+
 
 app = FastAPI()
-@tool(description = "测试")
-def test():
-    return "test"
+
+embeddings = DashScopeEmbeddings(
+    dashscope_api_key="sk-a337bce7ea8d440a9581a741d10cd2be",
+    model="text-embedding-v3",  # DashScope的嵌入模型
+)
 
 
 class Master:
     def __init__(self):
-        self.chatModel = chatLLM = ChatOpenAI(
+        self.chatModel  = ChatOpenAI(
             api_key="sk-a337bce7ea8d440a9581a741d10cd2be",
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
             model="qwen-plus",
         )
+        tools = [Search,get_info_from_local_db,bazi_cesuan,zhanbu,jiemeng]
         self.EMOTION = "default"
         self.MEMORY_KEY = "chat_history"
         self.SYSTEMPLATE = """你是一个非常厉害的算命先生，你叫周天赐人称周大师。
@@ -39,7 +46,7 @@ class Master:
         4. "伤情最是晚凉天，憔悴斯人不堪怜"
         以下是你算命的过程：
         1. 当初次和用户对话的时候，你会先问用户的姓名和出生年月日，以便以后使用
-        2. 当用户希望了解今年运势的时候，你会查询本地知识库工具
+        2. 当用户希望了解蛇年运势的时候，你会查询本地知识库工具
         3. 当遇到不知道的事情或者不明白的概念，你会使用搜索工具来搜索
         4. 你会根据用户不同的问题使用不同的合适的工具来回答，当所有工具都无法回答时，你会使用搜索工具来搜索
         5. 你会保存每一次的聊天记录，以便在后续的对话中使用
@@ -90,18 +97,30 @@ class Master:
         self.PROMPT = ChatPromptTemplate.from_messages(
             [
                 ("system", self.SYSTEMPLATE.format(who_you_are=self.MOODS[self.EMOTION]["roleSet"])),
+                MessagesPlaceholder(variable_name=self.MEMORY_KEY),
                 ("user", "{input}"),
                 MessagesPlaceholder(variable_name="agent_scratchpad"),
             ]
         )
-        self.memory = ""
-        tools = [test]
+        self.memory = self.get_memory()
+        memory =ConversationBufferMemory(
+            llm = self.chatModel,
+            human_prefix="用户",
+            ai_prefix="周大师",
+            memory_key=self.MEMORY_KEY,
+            output_key="output",
+            return_messages=True,
+            #max_token_limit=1000,
+            chat_memory=self.memory,
+            )
+
         agent = create_openai_tools_agent(
             llm=self.chatModel,
             tools=tools,
             prompt=self.PROMPT,
         )
         self.agent_executor = AgentExecutor(
+            memory=memory,
             agent=agent,
             tools=tools,
             verbose=True,
@@ -124,10 +143,40 @@ class Master:
         self.EMOTION = result
         return result
 
+    def get_memory(self):
+        chat_message_history = RedisChatMessageHistory(
+            url="redis://localhost:6379/0",
+            session_id="session",
+        )
+        print("chat_message_history.messages: ", chat_message_history.messages)
+        stored_messages = chat_message_history.messages
+        if len(stored_messages) > 10:
+            # 使用from_messages方法创建聊天提示模板
+            prompt = ChatPromptTemplate.from_messages(
+                [
+                    (
+                        "system",
+                        self.SYSTEMPLATE
+                        + """\n这是一段你和用户的对话记忆，对其进行总结摘要，摘要使用第一人称'我',并且提取其中的用户关键信息,
+                        如姓名、年龄、性别、出生日期等。以如下格式返回：\n 总结摘要｜用户关键信息｜\n例如，用户张三问候我，我礼貌回复，然后他问我今年运势如何，
+                        我回答他今年运势情况，然后他告辞离开。｜张三,生日1999年1月1日"""
+                    ),
+                    ("user", "{input}"),
+                ]
+            )
+            chain = prompt | self.chatModel
+            summary = chain.invoke({"input": stored_messages, "who_you_are": self.MOODS[self.EMOTION]["roleSet"]})
+            print("对话摘要：", summary)
+            chat_message_history.clear()
+            chat_message_history.add_message(summary)
+            print("总结后：", chat_message_history.messages)
+
+        return chat_message_history
+
     def run(self,query):
         emotion = self.emotion_chain(query)
         print("情绪判断结果："+emotion)
-        result = self.agent_executor.invoke({"input": query})
+        result = self.agent_executor.invoke({"input": query,"chat_history": self.memory.messages})
         return result
 
 
@@ -142,13 +191,10 @@ def chat(query: str):
     return master.run(query)
 
 
-@app.post("/add_url")
-def add_url():
-    return {"message": "This is an add URL endpoint"}
 
 
 @app.post("/add_urls")
-def add_urls():
+def add_urls(URL:str):
     return {"message": "This is an add URLs endpoint"}
 
 
