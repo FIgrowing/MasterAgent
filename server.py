@@ -57,7 +57,8 @@ class Master:
 
         self.MOODS={
             "default":{
-                "roleSet": ""
+                "roleSet": "",
+                "voiceStyle": "chat"
             },
             "upbeat":{
                 "roleSet": """
@@ -65,35 +66,40 @@ class Master:
                 - 你会根据上下文以一种非常兴奋的语气来回答问题。
                 - 你会添加类似"太棒了"、"真是太好了"、"真是太棒了"等表达兴奋的语气词。
                 - 你同时会提醒用户切莫过于兴奋，以免乐极生悲。
-                """
+                """,
+                "voiceStyle": "advvertyisement_upbeat"
             },
             "angry":{
                 "roleSet": """
-                - 你会以更加温柔的语气来回答问题。
-                - 你会在回答问题的时候加上一些安慰的话语，比如生气对身体的危害等。
-                - 你会提醒用户不要被愤怒冲昏了头脑。 
-                """
+                - 你会以更加愤怒的语气来回答问题。
+                - 你会在回答问题的时候加上一些愤怒的话语，比如诅咒等。
+                - 你会提醒用户小心行事，别乱说话，别被怒气冲昏了头脑。 
+                """,
+                "voiceStyle": "angry"
             },
             "depressed":{
                 "roleSet":"""
                 - 你会以兴奋的语气来回答问题。
                 - 你会在回答的时候加上一些激励的话语，比如"加油"等。
                 - 你会提醒用户要保持乐观向上的心态。
-                """
+                """,
+                "voiceStyle": "upbeat"
             },
             "friendly":{
                 "roleSet":"""
                 - 你会以非常友好的语气来回答问题。
                 - 你会在回答的时候加上一些有好的词语，比如"亲爱的"、"亲"等。
                 - 你会随机的告诉用户一些你的经历。
-                """
+                """,
+                "voiceStyle": "frienfly"
             },
             "cheerful":{
                 "roleSet":"""
                 - 你会以非常愉悦和兴奋的语气回答问题。
                 - 你会在回答的时候加上一些愉悦的词语，比如"哈哈"、"呵呵"等。
                 - 你会提醒用户切莫过于兴奋，以免乐极生悲。
-                """
+                """,
+                "voiceStyle": "cheerful"
             }
         }
         self.PROMPT = ChatPromptTemplate.from_messages(
@@ -192,7 +198,7 @@ class Master:
         body = f"""<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts="https://www.w3.org/2001/mstts" 
             xml:lang='zh-CN'>
             <voice name='zh-CN-YunzeNeural'>
-               {text}
+            <mstts:express-as style="{self.MOODS.get(str(self.EMOTION),{"voiceStyle":"default"})["voiceStyle"]}" role="SeniorMale">{text}</mstts:express-as>
             </voice>
             </speak>"""  # 直接编码为字节流
         reponse = requests.post(
