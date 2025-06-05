@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect,BackgroundTasks
 import uvicorn
 from langchain.agents.openai_tools.base import create_openai_tools_agent
 from langchain_core.prompts.chat import MessagesPlaceholder
@@ -10,7 +10,8 @@ from langchain_community.chat_message_histories.redis import RedisChatMessageHis
 from langchain.memory.buffer import ConversationBufferMemory
 from langchain_community.document_loaders.web_base import WebBaseLoader
 from langchain_text_splitters.character import RecursiveCharacterTextSplitter
-
+import asyncio
+import uuid
 
 app = FastAPI()
 
@@ -19,6 +20,7 @@ embeddings = DashScopeEmbeddings(
     model="text-embedding-v3",  # DashScope的嵌入模型
 )
 
+msseKey="6bEOAuKujP01oCVR8GAZCXZRHJwt8sFci8GODTQ6VGAIIcnGnVBmJQQJ99BFACYeBjFXJ3w3AAAYACOGNzc5"
 
 class Master:
     def __init__(self):
@@ -27,7 +29,7 @@ class Master:
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
             model="qwen-plus",
         )
-        tools = [Search,get_info_from_local_db,bazi_cesuan,zhanbu,jiemeng]
+        tools = [Search,get_info_from_local_db,bazi_cesuan,zhanbu,jiemeng,get_info_from_local_db]
         self.EMOTION = "default"
         self.MEMORY_KEY = "chat_history"
         self.SYSTEMPLATE = """你是一个非常厉害的算命先生，你叫周天赐人称周大师。
@@ -173,6 +175,39 @@ class Master:
 
         return chat_message_history
 
+    # 这个函数不需要返回值，只是触发了语言合成
+    def background_voice_synthesis(self,text:str,uid:str):
+        asyncio.run(self.get_voice(text,uid))
+
+    async def get_voice(self,text:str,uid:str):
+        print("文本", text)
+        # 以下是微软TTS代码
+        headers = {
+            "Ocp-Apim-Subscription-Key": msseKey,
+            "Content-Type": "application/ssml+xml",  # 添加charset声明
+            "X-Microsoft-OutputFormat": "audio-16khz-32kbitrate-mono-mp3",
+            "User-Agent": "ZhouMaster's Bot"
+        }
+        # 使用UTF-8编码请求体
+        body = f"""<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts="https://www.w3.org/2001/mstts" 
+            xml:lang='zh-CN'>
+            <voice name='zh-CN-YunzeNeural'>
+               {text}
+            </voice>
+            </speak>"""  # 直接编码为字节流
+        reponse = requests.post(
+            "https://eastus.tts.speech.microsoft.com/cognitiveservices/v1",
+            headers=headers,
+            data=body.encode("utf-8")  # 确保使用UTF-8编码
+        )
+        print(reponse)
+        if reponse.status_code == 200:
+            with open(f"voice/{uid}.mp3", "wb") as f:
+                f.write(reponse.content)
+            print("语音合成成功，文件名为：", f"voice/{uid}.mp3")
+        else:
+            print("语音合成失败，状态码：", reponse.status_code, "错误信息：", reponse.text)
+
     def run(self,query):
         emotion = self.emotion_chain(query)
         print("情绪判断结果："+emotion)
@@ -186,16 +221,29 @@ def read_root():
 
 
 @app.post("/chat")
-def chat(query: str):
+def chat(query: str,background_tasks: BackgroundTasks):
     master = Master()
-    return master.run(query)
+    msg = master.run(query)
+    unique_id = str(uuid.uuid4())
+    background_tasks.add_task(master.background_voice_synthesis,msg["output"],unique_id)
+    return {"response": msg, "id": unique_id}
 
 
 
 
 @app.post("/add_urls")
 def add_urls(URL:str):
-    return {"message": "This is an add URLs endpoint"}
+    loader = WebBaseLoader(URL)
+    docs = loader.load()
+    documents = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=50).split_documents(docs)
+    qrrand = Qdrant.from_documents(
+        documents=documents,
+        embedding=embeddings,
+        path="/local_qdrant",
+        collection_name="local_docments",
+    )
+    print("向量数据库创建完成")
+    return {"OK": "添加成功"}
 
 
 @app.post("/add_pdfs")

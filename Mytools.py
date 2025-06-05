@@ -141,3 +141,13 @@ def jiemeng(query: str):
             return "解梦失败，请稍后再试"
     else:
         return "技术错误，请告诉用户稍后再试"
+
+@tool(description="只有回答与2025年运势或者蛇年运势相关的问题的时候，会使用这个工具且必须有用户的输入才能使用这个工具")
+def get_info_from_local_db(query: str):
+    client = Qdrant(
+        QdrantClient(path="/local_qdrant"),
+        collection_name="local_docments",
+        embedding=embeddings, )
+    retriever = client.as_retriever(search_type="mmr")
+    result = retriever.get_relevant_documents(query)
+    return result
