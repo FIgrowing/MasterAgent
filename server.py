@@ -12,6 +12,7 @@ from langchain_community.document_loaders.web_base import WebBaseLoader
 from langchain_text_splitters.character import RecursiveCharacterTextSplitter
 import asyncio
 import uuid
+import os
 
 app = FastAPI()
 
@@ -208,6 +209,7 @@ class Master:
         )
         print(reponse)
         if reponse.status_code == 200:
+            os.makedirs("voice", exist_ok=True)
             with open(f"voice/{uid}.mp3", "wb") as f:
                 f.write(reponse.content)
             print("语音合成成功，文件名为：", f"voice/{uid}.mp3")
@@ -241,11 +243,12 @@ def chat(query: str,background_tasks: BackgroundTasks):
 def add_urls(URL:str):
     loader = WebBaseLoader(URL)
     docs = loader.load()
+    os.makedirs("local_qdrant", exist_ok=True)
     documents = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=50).split_documents(docs)
     qrrand = Qdrant.from_documents(
         documents=documents,
         embedding=embeddings,
-        path="/local_qdrant",
+        path="local_qdrant",
         collection_name="local_docments",
     )
     print("向量数据库创建完成")
