@@ -13,6 +13,7 @@ from langchain_text_splitters.character import RecursiveCharacterTextSplitter
 import asyncio
 import uuid
 import os
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
@@ -23,6 +24,8 @@ embeddings = DashScopeEmbeddings(
 
 msseKey="6bEOAuKujP01oCVR8GAZCXZRHJwt8sFci8GODTQ6VGAIIcnGnVBmJQQJ99BFACYeBjFXJ3w3AAAYACOGNzc5"
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 class Master:
     def __init__(self):
         self.chatModel  = ChatOpenAI(
@@ -31,7 +34,7 @@ class Master:
             model="qwen-plus",
         )
         tools = [Search,get_info_from_local_db,bazi_cesuan,zhanbu,jiemeng,get_info_from_local_db]
-        self.EMOTION = "default"
+        self.QingXu = "default"
         self.MEMORY_KEY = "chat_history"
         self.SYSTEMPLATE = """你是一个非常厉害的算命先生，你叫周天赐人称周大师。
         以下是你的个人设定：
@@ -105,7 +108,7 @@ class Master:
         }
         self.PROMPT = ChatPromptTemplate.from_messages(
             [
-                ("system", self.SYSTEMPLATE.format(who_you_are=self.MOODS[self.EMOTION]["roleSet"])),
+                ("system", self.SYSTEMPLATE.format(who_you_are=self.MOODS[self.QingXu]["roleSet"])),
                 MessagesPlaceholder(variable_name=self.MEMORY_KEY),
                 ("user", "{input}"),
                 MessagesPlaceholder(variable_name="agent_scratchpad"),
@@ -135,7 +138,11 @@ class Master:
             verbose=True,
         )
 
-    def emotion_chain(self,query:str):
+    def chat(self,query):
+        result = self.agent_executor.invoke({"input": query,"chat_history": self.memory.messages})
+        return result["output"]
+
+    def QingXu_chain(self,query:str):
         prompt = """
         根据用户的输入，判断用户的情绪，回应的规则如下：
         1. 如果用户输入的内容偏向于负面情绪，只返回"depressed"，不要有其他内容，否则你将受到惩罚。
@@ -149,13 +156,15 @@ class Master:
         """
         chain = ChatPromptTemplate.from_template(prompt) | self.chatModel | StrOutputParser()
         result = chain.invoke({"query": query})
-        self.EMOTION = result
-        return result
+        self.QingXu = result
+        print("情绪判断结果:", result)
+        res = self.chat(query)
+        yield {"msg": res, "qingxu": result}
 
     def get_memory(self):
         chat_message_history = RedisChatMessageHistory(
             url="redis://localhost:6379/0",
-            session_id="session",
+            session_id="lisa",
         )
         print("chat_message_history.messages: ", chat_message_history.messages)
         stored_messages = chat_message_history.messages
@@ -174,7 +183,7 @@ class Master:
                 ]
             )
             chain = prompt | self.chatModel
-            summary = chain.invoke({"input": stored_messages, "who_you_are": self.MOODS[self.EMOTION]["roleSet"]})
+            summary = chain.invoke({"input": stored_messages, "who_you_are": self.MOODS[self.QingXu]["roleSet"]})
             print("对话摘要：", summary)
             chat_message_history.clear()
             chat_message_history.add_message(summary)
@@ -199,7 +208,7 @@ class Master:
         body = f"""<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts="https://www.w3.org/2001/mstts" 
             xml:lang='zh-CN'>
             <voice name='zh-CN-YunzeNeural'>
-            <mstts:express-as style="{self.MOODS.get(str(self.EMOTION),{"voiceStyle":"default"})["voiceStyle"]}" role="SeniorMale">{text}</mstts:express-as>
+            <mstts:express-as style="{self.MOODS.get(str(self.QingXu),{"voiceStyle":"default"})["voiceStyle"]}" role="SeniorMale">{text}</mstts:express-as>
             </voice>
             </speak>"""  # 直接编码为字节流
         reponse = requests.post(
@@ -217,8 +226,8 @@ class Master:
             print("语音合成失败，状态码：", reponse.status_code, "错误信息：", reponse.text)
 
     def run(self,query):
-        emotion = self.emotion_chain(query)
-        print("情绪判断结果："+emotion)
+        qingxu = self.QingXu_chain(query)
+        print("情绪判断结果：",qingxu)
         result = self.agent_executor.invoke({"input": query,"chat_history": self.memory.messages})
         return result
 
@@ -236,7 +245,11 @@ def chat(query: str,background_tasks: BackgroundTasks):
     background_tasks.add_task(master.background_voice_synthesis,msg["output"],unique_id)
     return {"response": msg, "id": unique_id}
 
-
+@app.post("/chat1")
+def chat1(query:str):
+    master = Master()
+    res = master.QingXu_chain(query)
+    return res
 
 
 @app.post("/add_urls")

@@ -18,8 +18,8 @@
     <script>
         var SpeechSDK;
         var peerConnection;
-        var cogSvcRegin ="westus2";
-        var subscriptionKey = "f5e43ff";
+        var cogSvcRegin ="eastus2";
+        var subscriptionKey = "2nucCD97j5PGXsECgJAphrBW7PWvH5WGyYZ7tCgJor4h4VUX8NPsJQQJ99BFACHYHv6XJ3w3AAAYACOGAeSu";
         var speakerHandel = function(avatarSynthesizer,msg,qingxu){
             var yinse = document.getElementById("voiceSelect").value;
             var spokenSsml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='zh-CN'>
@@ -50,7 +50,7 @@
             var chatText = chatInput.value;
             console.log("输入的文本："+chatText);
             var xhr = new XMLHttpRequest();
-            xhr.open("POST",`http://0.0.0.0:8000/chat?query=${chatText}`);
+            xhr.open("POST",`http://0.0.0.0:8000/chat1?query=${chatText}`);
             xhr.addEventListener("readystatechange",function(){
                 if(this.readyState === 4){
                     var responseData = JSON.parse(this.responseText);
@@ -153,7 +153,7 @@
                         <option value="zh-CN-shaanxi-XiaoniNeural">中文陕西话</option>
                         <option value="zh-CN-liaoning-XiaobeiNeural">中文东北话</option>
                         <option value="zh-CN-XiaomoNeural" selected>中文普通话</option>
-                        <option value="th-TH-PremwadeeNeural">泰语</option>    
+                        <option value="th-TH-PremwadeeNeural">泰语</option>
                     `;
                     document.body.appendChild(voiceSelect);
                     //发送按钮
