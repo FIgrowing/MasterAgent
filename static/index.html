@@ -50,7 +50,7 @@
             var chatText = chatInput.value;
             console.log("输入的文本："+chatText);
             var xhr = new XMLHttpRequest();
-            xhr.open("POST",`http://0.0.0.0:8000/chat1?query=${chatText}`);
+            xhr.open("POST",`http://127.0.0.1:8000/chat1?query=${chatText}`);
             xhr.addEventListener("readystatechange",function(){
                 if(this.readyState === 4){
                     var responseData = JSON.parse(this.responseText);
