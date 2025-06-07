@@ -17,6 +17,17 @@ from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
+# LANGSMITH_TRACING=True
+# LANGSMITH_ENDPOINT="https://api.smith.langchain.com"
+# LANGSMITH_API_KEY="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"
+# LANGSMITH_PROJECT="MasterAgent"
+# OPENAI_API_KEY="sk-a337bce7ea8d440a9581a741d10cd2be"
+
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = "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"
+os.environ["LANGSMITH_PROJECT"] = "MasterAgent"
+
+
 embeddings = DashScopeEmbeddings(
     dashscope_api_key="sk-a337bce7ea8d440a9581a741d10cd2be",
     model="text-embedding-v3",  # DashScope的嵌入模型
@@ -138,9 +149,7 @@ class Master:
             verbose=True,
         )
 
-    def chat(self,query):
-        result = self.agent_executor.invoke({"input": query,"chat_history": self.memory.messages})
-        return result["output"]
+
 
     def QingXu_chain(self,query:str):
         prompt = """
@@ -158,8 +167,25 @@ class Master:
         result = chain.invoke({"query": query})
         self.QingXu = result
         print("情绪判断结果:", result)
+        return result
+
+    def qingxu_chain(self,query:str):
+        prompt = """根据用户的输入判断用户的情绪，回应的规则如下：
+        1. 如果用户输入的内容偏向于负面情绪，只返回"depressed",不要有其他内容，否则将受到惩罚。
+        2. 如果用户输入的内容偏向于正面情绪，只返回"friendly",不要有其他内容，否则将受到惩罚。
+        3. 如果用户输入的内容偏向于中性情绪，只返回"default",不要有其他内容，否则将受到惩罚。
+        4. 如果用户输入的内容包含辱骂或者不礼貌词句，只返回"angry",不要有其他内容，否则将受到惩罚。
+        5. 如果用户输入的内容比较兴奋，只返回”upbeat",不要有其他内容，否则将受到惩罚。
+        6. 如果用户输入的内容比较悲伤，只返回“depressed",不要有其他内容，否则将受到惩罚。
+        7.如果用户输入的内容比较开心，只返回"cheerful",不要有其他内容，否则将受到惩罚。
+        8. 只返回英文，不允许有换行符等其他内容，否则会受到惩罚。
+        用户输入的内容是：{query}"""
+        chain = ChatPromptTemplate.from_template(prompt) | self.chatModel | StrOutputParser()
+        result = chain.invoke({"query":query})
+        self.QingXu = result
+        print("情绪判断结果:",result)
         res = self.chat(query)
-        yield {"msg": res, "qingxu": result}
+        yield {"msg":res,"qingxu":result}
 
     def get_memory(self):
         chat_message_history = RedisChatMessageHistory(
@@ -227,9 +253,13 @@ class Master:
 
     def run(self,query):
         qingxu = self.QingXu_chain(query)
-        print("情绪判断结果：",qingxu)
+        print("情绪判断结果："+qingxu)
         result = self.agent_executor.invoke({"input": query,"chat_history": self.memory.messages})
         return result
+
+    def chat(self,query):
+        result = self.agent_executor.invoke({"input":query})
+        return result["output"]
 
 
 @app.get("/")
@@ -248,7 +278,7 @@ def chat(query: str,background_tasks: BackgroundTasks):
 @app.post("/chat1")
 def chat1(query:str):
     master = Master()
-    res = master.QingXu_chain(query)
+    res = master.qingxu_chain(query)
     return res
 
 
@@ -292,4 +322,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 if __name__ == '__main__':
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
