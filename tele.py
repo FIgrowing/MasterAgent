@@ -6,7 +6,7 @@ import urllib.parse
 import os
 import asyncio
 
-bot = telebot.TeleBot()
+bot = telebot.TeleBot('7968776758:AAGIudqYIKDeZ9RT6WoXKukOweF28pdkNuY')
 
 @bot.message_handler(commands=['start'])
 def start_message(message):
@@ -17,10 +17,11 @@ def start_message(message):
 def echo_all(message):
     try:
         encoded_message = urllib.parse.quote(message.text)
-        reponse = requests.post("http://localhost:8000/chat?query="+encoded_message, timeout=100)
+        reponse = requests.post("http://127.0.0.1:8000/chat?query="+encoded_message)
         if reponse.status_code == 200:
             aisay = json.loads(reponse.text)
-            if "msg" in aisay:
+            print("AI Response:", aisay)
+            if "response" in aisay:
                 bot.reply_to(message, aisay["response"]["output"])
                 audio_path = f"voice/{aisay['id']}.mp3"
                 asyncio.run(check_audio(message, audio_path))
@@ -43,3 +44,5 @@ async def check_audio(message, audio_path):
 
 
 bot.infinity_polling()
+
+
