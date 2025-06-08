@@ -5,7 +5,6 @@ from langchain_core.prompts.chat import MessagesPlaceholder
 from langchain.agents.agent import AgentExecutor
 from langchain_core.output_parsers.string import StrOutputParser
 from Mytools import *
-from langchain.memory.token_buffer import ConversationTokenBufferMemory
 from langchain_community.chat_message_histories.redis import RedisChatMessageHistory
 from langchain.memory.buffer import ConversationBufferMemory
 from langchain_community.document_loaders.web_base import WebBaseLoader
@@ -122,7 +121,7 @@ class Master:
                 ("system", self.SYSTEMPLATE.format(who_you_are=self.MOODS[self.QingXu]["roleSet"])),
                 MessagesPlaceholder(variable_name=self.MEMORY_KEY),
                 ("user", "{input}"),
-                MessagesPlaceholder(variable_name="agent_scratchpad"),
+                MessagesPlaceholder(variable_name="agent_scratchpad"),#agent_scratchpad会存储 Agent 在决策过程中的中间思考步骤
             ]
         )
         self.memory = self.get_memory()
@@ -135,6 +134,8 @@ class Master:
             return_messages=True,
             #max_token_limit=1000,
             chat_memory=self.memory,
+            #存储对话历史： chat_memory是一个实现了BaseChatMemory接口的对象，负责存储和检索对话消息。在这个例子中，self.memory是RedisChatMessageHistory的实例，它将消息存储在 Redis 中。
+            #支持多轮对话： ConversationBufferMemory会从chat_memory中读取历史消息，并作为上下文传递给 LLM，使 AI 能够理解对话的连贯性
             )
 
         agent = create_openai_tools_agent(

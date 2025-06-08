@@ -1,5 +1,4 @@
 import json
-
 from langchain.agents import tool
 from langchain_community.utilities.serpapi import SerpAPIWrapper
 from langchain_community.vectorstores.qdrant import Qdrant
@@ -9,7 +8,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.output_parsers.json import JsonOutputParser
 import requests
-from langchain_core.prompts import PromptTemplate
+
 
 
 YUANFENJU_API_KEY = "YHPRGuiURJ5IzBX6IzqYJBUp8"
